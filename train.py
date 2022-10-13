@@ -58,7 +58,7 @@ def complete_episode(model, environment, info, episode_reward, episode,
 def run_episode(env, model, target_model, optimizer, replay_buffer, args,
                 device, info, episode):
     episode_reward = 0.0
-    state = env.reset()
+    state, stats = env.reset()
 
     while True:
         epsilon = update_epsilon(info.index, args)
@@ -69,7 +69,7 @@ def run_episode(env, model, target_model, optimizer, replay_buffer, args,
         action = model.act(state, epsilon, device)
         if args.render:
             env.render()
-        next_state, reward, done, stats = env.step(action)
+        next_state, reward, done, trunc, stats = env.step(action)
         replay_buffer.push(state, action, reward, next_state, done)
         state = next_state
         episode_reward += reward

@@ -3,7 +3,8 @@ import numpy as np
 from collections import deque
 from gym import make, ObservationWrapper, wrappers, Wrapper
 from gym.spaces import Box
-from nes_py.wrappers import JoypadSpace
+# from nes_py.wrappers import JoypadSpace
+from smbgym.env import Env
 
 
 class FrameDownsample(ObservationWrapper):
@@ -11,10 +12,10 @@ class FrameDownsample(ObservationWrapper):
         super(FrameDownsample, self).__init__(env)
         self.observation_space = Box(low=0,
                                      high=255,
-                                     shape=(84, 84, 1),
+                                     shape=(16, 16, 1),
                                      dtype=np.uint8)
-        self._width = 84
-        self._height = 84
+        self._width = 16
+        self._height = 16
 
     def observation(self, observation):
         frame = cv2.cvtColor(observation, cv2.COLOR_RGB2GRAY)
@@ -34,13 +35,13 @@ class MaxAndSkipEnv(Wrapper):
         total_reward = 0.0
         done = None
         for _ in range(self._skip):
-            obs, reward, done, info = self.env.step(action)
+            obs, reward, done, trunc, info = self.env.step(action)
             self._obs_buffer.append(obs)
             total_reward += reward
             if done:
                 break
         max_frame = np.max(np.stack(self._obs_buffer), axis=0)
-        return max_frame, total_reward, done, info
+        return max_frame, total_reward, done, False, info
 
     def reset(self):
         self._obs_buffer.clear()
@@ -57,13 +58,13 @@ class FireResetEnv(Wrapper):
 
     def reset(self, **kwargs):
         self.env.reset(**kwargs)
-        obs, _, done, _ = self.env.step(1)
+        obs, _, done, info = self.env.step(1)
         if done:
             self.env.reset(**kwargs)
-        obs, _, done, _ = self.env.step(2)
+        obs, _, done, info = self.env.step(2)
         if done:
             self.env.reset(**kwargs)
-        return obs
+        return obs, info
 
     def step(self, action):
         return self.env.step(action)
@@ -81,7 +82,8 @@ class FrameBuffer(ObservationWrapper):
     def reset(self):
         self.buffer = np.zeros_like(self.observation_space.low,
                                     dtype=self._dtype)
-        return self.observation(self.env.reset())
+        obs, info = self.env.reset()
+        return self.observation(obs), info
 
     def observation(self, observation):
         self.buffer[:-1] = self.buffer[1:]
@@ -113,7 +115,7 @@ class CustomReward(Wrapper):
         self._current_score = 0
 
     def step(self, action):
-        state, reward, done, info = self.env.step(action)
+        state, reward, done, trunc, info = self.env.step(action)
         reward += (info['score'] - self._current_score) / 40.0
         self._current_score = info['score']
         if done:
@@ -121,17 +123,19 @@ class CustomReward(Wrapper):
                 reward += 350.0
             else:
                 reward -= 50.0
-        return state, reward / 10.0, done, info
+        return state, reward / 10.0, done, False, info
         
 
 def wrap_environment(environment, action_space, monitor=False, iteration=0):
-    env = make(environment)
-    if monitor:
-        env = wrappers.Monitor(env, 'recording/run%s' % iteration, force=True)
-    env = JoypadSpace(env, action_space)
+    # env = make(environment)
+    # env = make("Mario-v0")
+    env = Env()
+    # if monitor:
+    #     env = wrappers.Monitor(env, 'recording/run%s' % iteration, force=True)
+    # env = JoypadSpace(env, action_space)
     env = MaxAndSkipEnv(env)
-    if 'FIRE' in env.unwrapped.get_action_meanings():
-        env = FireResetEnv(env)
+    # if 'FIRE' in env.unwrapped.get_action_meanings():
+    #     env = FireResetEnv(env)
     env = FrameDownsample(env)
     env = ImageToPyTorch(env)
     env = FrameBuffer(env, 4)

@@ -14,17 +14,18 @@ def test(environment, action_space, iteration):
                                         '%s.dat' % environment)))
 
     total_reward = 0.0
-    state = env.reset()
+    state, info = env.reset()
     while True:
         state_v = torch.tensor(np.array([state], copy=False))
         q_vals = net(state_v).data.numpy()[0]
         action = np.argmax(q_vals)
-        state, reward, done, info = env.step(action)
+        # state, reward, done, info = env.step(action)
+        state, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
         if info['flag_get']:
             print('WE GOT THE FLAG!!!!!!!')
             flag = True
-        if done:
+        if terminated:
             print(total_reward)
             break
 
